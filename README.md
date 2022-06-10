@@ -58,7 +58,8 @@ future<> f(){
 }
 
 future<> run(){
-    return f().handle_exception([] (auto e) { std::cout << "Gate closed, execution stopped\n"; }); // closing gate while coro is running will throw an  exception
+    // closing gate while coro is running will throw an  exception
+    return f().handle_exception([] (auto e) { std::cout << "Gate closed, execution stopped\n"; }); 
 }
 
 int main(int argc, char** argv) {
