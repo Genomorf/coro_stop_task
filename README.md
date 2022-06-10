@@ -95,3 +95,78 @@ firth
 y is: 1
 Client deleted
 ```
+
+Это пример кстати успешно заменяется на seastar::with_timeout
+```c++
+future<> f(){
+    auto fut = c.start_coro_chain();
+    return with_timeout(std::chrono::steady_clock::now() + std::chrono::milliseconds(2500), std::move(fut)).
+            handle_exception([] (std::exception_ptr e) {
+                std::cout << "timeout happend\n";
+                return 0;
+            }).then([] (auto x) {
+                std::cout << "x is : " << x << std::endl;
+                return make_ready_future();
+            });
+}
+```
+Существенная разница, что ему плевать на все и он отменяет не выборочно (в предыдущем случае только что помечено with_gate), а все сразу, поэтому sleep respond2 мы не дождемся и в консоли будет только
+```
+Client created
+first
+timeout happend
+x is : 0
+Client deleted
+```
+
+Однако есть случаи когда нам нужно отменить не по таймеру, а как-то еще.
+
+Например.
+
+1) Если придет сообщение от другой сущности.
+```c++
+promise<int> p;
+future<> f(){
+    sleep(3s).then([] { p.set_value(1); }); // simulate some work
+    auto x = async([] {
+        return with_gate(g, [] {
+            auto fut = p.get_future(); // waiting for value to be set
+            if(fut.get() == 1)
+                return g.close();
+            else{
+                return make_ready_future();
+            }
+        }).get();
+    });
+    auto y = co_await c.start_coro_chain(); // if failed jump to run handle_exception
+    std::cout << "y is: " << y << std::endl; // if success we will see this output
+    co_return;
+}
+
+future<> run(){
+    return f().handle_exception([] (auto e) { std::cout << "Gate closed, execution stopped\n"; }); // closing gate while coro is running will throw exception
+}
+```
+В данном случае вместо promise<int\> p может быть любая сущность, например сервер или сервис. Он ожидает когда future будет готова и если там окажется 1, то гейт закроется. Если нет, то исполнение продолжится. Вывод такой же как в 1 примере.
+
+2) Можно остановить выполнение просто нажатием клавиши
+
+```c++
+future<> f(){
+    auto x = async([] {
+        return with_gate(g, [] {
+            return smp::submit_to(1, [] { // cin will block this core
+                int x;
+                while(1) {
+                    std::cin >> x;
+                    if(x == 1)
+                        return g.close();
+                }
+            });
+        }).get();
+    });
+    auto y = co_await c.start_coro_chain(); // if failed jump to run handle_exception
+    std::cout << "y is: " << y << std::endl; // if success we will see this output
+    co_return;
+}
+```
