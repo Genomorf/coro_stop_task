@@ -30,15 +30,15 @@ struct Client {
     }
     future<int> respond3(){
         co_await sleep(timeout).then([] { std::cout << "third\n" << std::endl; });
-        co_return co_await with_gate(g, [this] () -> future<int> { return respond4(); });
+        co_return co_await with_gate(g, [this] { return respond4(); });
     }
     future<int> respond2(){
         co_await sleep(timeout).then([] { std::cout << "second\n" << std::endl; });
-        co_return co_await with_gate(g, [this] () -> future<int> { return respond3(); });
+        co_return co_await with_gate(g, [this] { return respond3(); });
     }
     future<int> start_coro_chain(){
         co_await sleep(timeout).then([] { std::cout << "first\n" << std::endl; });
-        co_return co_await with_gate(g, [this] () -> future<int>  { return respond2(); });
+        co_return co_await with_gate(g, [this] { return respond2(); });
     }
 };
 
