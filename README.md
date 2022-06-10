@@ -42,7 +42,7 @@ struct Client {
     }
 };
 
-Client c{2s}; // set timeout to 2s
+Client c{2s}; // set sleep time to each func in Cilent to 2s
 
 future<> f(){
     auto x = async([] {
