@@ -52,7 +52,7 @@ future<> f(){
             });
         }).get();
     });
-    auto y = co_await c.start_coro_chain();
+    auto y = co_await c.start_coro_chain(); // if failed jump to run handle_exception
     std::cout << "y is: " << y << std::endl; // if success we will see this output
     co_return;
 }
@@ -84,3 +84,14 @@ Client deleted
 2 сек - 4 сек: respond2 распечатает second, но не запустит respond3, который находится в with_gate, который уже закрыт
 
 Так как после закрытия гейта мы продолжаем пытаться запустить функцию с with_gate, будет брошен exception, который ловим в run()
+
+Если бы не было закрытия гейта, то вывод бы был очевидно такой:
+```
+Client created
+first
+second
+third
+firth
+y is: 1
+Client deleted
+```
