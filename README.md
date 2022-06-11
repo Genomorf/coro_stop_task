@@ -178,3 +178,51 @@ future<> f(){
     co_return;
 }
 ```
+# UPDATE
+Можно переписать функцию seastar::with_timeout для наших нужд. Например так:
+```c++
+template<typename... T, typename U>
+future<T...> with_message(future<T...> f, promise<U>& msg_promise, U msg_value) {
+    if (f.available()) {
+        return f;
+    }
+    auto pr = std::make_unique<promise<T...>>();
+    auto result = pr->get_future(); // async waiting for future1
+
+    (void)async([&pr = *pr, &msg_promise, &msg_value] { // async waiting for future2 (for message)
+        auto msg = msg_promise.get_future(); 
+        if(msg.get() == msg_value)
+            pr.set_exception(std::make_exception_ptr(std::runtime_error{"message said to stop"}));
+    });
+    // Future is returned indirectly.
+    // if (f is ready) forward it to pr and return
+    // else wait for it for eternity
+    // or wait for message to stop all of it
+    (void)f.then_wrapped([pr = std::move(pr)] (auto&& f) mutable { 
+            f.forward_to(std::move(*pr));
+    });
+    return result;
+}
+
+future<> f(){
+    sleep(3s).then([] { p.set_value(1); }); // simulate some work, wait msg 
+    auto fut = c.start_coro_chain();
+    return with_message(std::move(fut), p, 1).
+            handle_exception([] (std::exception_ptr e) {
+                std::cout << "message happend\n";
+                return 0;
+            }).then([] (auto x) {
+                std::cout << "x is : " << x << std::endl;
+                return make_ready_future();
+            });
+}
+```
+
+Вместо ожидания таймера, мы передаем в with_message - promise<U>, future которого будем ждать. И если в этой future будет значение == U msg_value, тогда возвращаем failed future. По идее, таймер и эту реализацию можно заменить на что угодно. 
+```
+Client created
+first
+message happend
+x is : 0
+Client deleted
+```
